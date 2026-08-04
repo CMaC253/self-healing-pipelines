@@ -7,7 +7,6 @@ _credential = DefaultAzureCredential()
 def _kv_secret(uri: str) -> str:
     if not uri:
         return ""
-    # uri form: https://<vault>.vault.azure.net/secrets/<name>/<version>
     vault = uri.split("//")[1].split(".")[0]
     name = uri.rstrip("/").split("/")[-2]
     client = SecretClient(f"https://{vault}.vault.azure.net", _credential)
@@ -16,8 +15,11 @@ def _kv_secret(uri: str) -> str:
 class Config:
     ado_org = os.environ["ADO_ORG"]
     ado_pat = _kv_secret(os.environ.get("ADO_PAT_SECRET_URI", ""))
-    openai_name = os.environ["OPENAI_NAME"]
-    openai_deployment = os.environ["OPENAI_DEPLOYMENT"]
+    
+    # Azure AI Foundry Endpoint & GPT-5 Deployment
+    openai_endpoint = os.environ["OPENAI_ENDPOINT"] 
+    openai_deployment = os.environ["OPENAI_DEPLOYMENT"] # e.g., "gpt-5"
+    
     mcp_server_url = os.environ["MCP_SERVER_URL"]
     slack_webhook = _kv_secret(os.environ.get("SLACK_WEBHOOK_SECRET_URI", ""))
     cosmos_endpoint = os.environ["COSMOS_ENDPOINT"]
