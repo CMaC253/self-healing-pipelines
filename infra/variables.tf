@@ -23,17 +23,18 @@ variable "ado_pat" {
 
 variable "openai_name" {
   type        = string
-  description = "Name of the pre-existing Azure OpenAI account"
+  description = "Name of the pre-existing Azure AI Foundry resource"
 }
 
 variable "openai_resource_group_name" {
   type        = string
-  description = "Resource Group of the pre-existing Azure OpenAI account"
+  description = "Resource Group of the pre-existing Azure AI Foundry resource"
 }
 
 variable "openai_deployment" {
   type        = string
-  description = "Deployment name inside Azure OpenAI"
+  description = "Deployment name of the LLM inside Foundry (e.g., gpt-5)"
+  default     = "gpt-5"
 }
 
 variable "mcp_server_url" {

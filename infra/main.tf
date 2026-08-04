@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100"
+      version = "~> 4.50" # 2026 Provider
     }
   }
 }
@@ -16,14 +16,12 @@ resource "azurerm_resource_group" "rg" {
   location = var.location
 }
 
-# Managed Identity
 resource "azurerm_user_assigned_identity" "mi" {
   name                = "mi-${var.base_name}"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
 }
 
-# Storage Account for Function
 resource "azurerm_storage_account" "storage" {
   name                     = "st${replace(var.base_name, "-", "")}"
   resource_group_name      = azurerm_resource_group.rg.name
@@ -32,7 +30,6 @@ resource "azurerm_storage_account" "storage" {
   account_replication_type = "LRS"
 }
 
-# Cosmos DB
 resource "azurerm_cosmosdb_account" "cosmos" {
   name                = "cosmos-${var.base_name}"
   location            = azurerm_resource_group.rg.location
@@ -69,7 +66,6 @@ resource "azurerm_cosmosdb_sql_container" "container" {
   throughput            = 400
 }
 
-# Key Vault
 resource "azurerm_key_vault" "kv" {
   name                       = "kv-${var.base_name}"
   location                   = azurerm_resource_group.rg.location
@@ -102,19 +98,18 @@ resource "azurerm_key_vault_secret" "slack_webhook" {
   key_vault_id = azurerm_key_vault.kv.id
 }
 
-# Azure OpenAI Role Assignment
-data "azurerm_cognitive_account" "openai" {
+# Azure AI Foundry Resource (as of 2026, unified under azurerm_ai_services)
+data "azurerm_ai_services" "foundry" {
   name                = var.openai_name
   resource_group_name = var.openai_resource_group_name
 }
 
-resource "azurerm_role_assignment" "openai_role" {
-  scope                = data.azurerm_cognitive_account.openai.id
-  role_definition_name = "Cognitive Services OpenAI User"
+resource "azurerm_role_assignment" "ai_foundry_role" {
+  scope                = data.azurerm_ai_services.foundry.id
+  role_definition_name = "Azure AI Developer" # 2026 IAM role for Foundry
   principal_id         = azurerm_user_assigned_identity.mi.principal_id
 }
 
-# App Service Plan (Premium EP1 for VNet integration & always-on capabilities)
 resource "azurerm_service_plan" "plan" {
   name                = "plan-${var.base_name}"
   location            = azurerm_resource_group.rg.location
@@ -123,7 +118,6 @@ resource "azurerm_service_plan" "plan" {
   sku_name            = "EP1"
 }
 
-# Function App
 resource "azurerm_linux_function_app" "func" {
   name                       = "func-${var.base_name}"
   location                   = azurerm_resource_group.rg.location
@@ -141,7 +135,7 @@ resource "azurerm_linux_function_app" "func" {
     "AZURE_TENANT_ID"             = data.azurerm_client_config.current.tenant_id
     "ADO_ORG"                     = var.ado_org
     "ADO_PAT_SECRET_URI"          = azurerm_key_vault_secret.ado_pat.id
-    "OPENAI_NAME"                 = var.openai_name
+    "OPENAI_ENDPOINT"             = data.azurerm_ai_services.foundry.endpoint
     "OPENAI_DEPLOYMENT"           = var.openai_deployment
     "MCP_SERVER_URL"              = var.mcp_server_url
     "SLACK_WEBHOOK_SECRET_URI"    = azurerm_key_vault_secret.slack_webhook.id
@@ -155,7 +149,7 @@ resource "azurerm_linux_function_app" "func" {
 
   site_config {
     application_stack {
-      python_version = "3.11"
+      python_version = "3.12" # Python 3.12 is standard as of 2026
     }
   }
 }

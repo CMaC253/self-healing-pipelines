@@ -1,0 +1,74 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: self-healing-secrets
+  - name: terraformWorkingDirectory
+    value: '$(System.DefaultWorkingDirectory)/infra'
+
+stages:
+  - stage: DeployInfrastructure
+    jobs:
+      - job: TerraformApply
+        steps:
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: '1.7.0'
+
+          - script: |
+              terraform init \
+                -backend-config="storage_account_name=$(tf_state_storage)" \
+                -backend-config="container_name=tfstate" \
+                -backend-config="key=selfhealing.tfstate" \
+                -backend-config="resource_group_name=$(tf_state_rg)"
+            displayName: 'Terraform Init'
+            workingDirectory: $(terraformWorkingDirectory)
+            env:
+              ARM_ACCESS_KEY: $(tf_state_access_key)
+
+          - script: |
+              terraform apply -auto-approve \
+                -var="base_name=shp" \
+                -var="ado_org=$(System.TeamFoundationCollectionUri)" \
+                -var="ado_pat=$(ADO_PAT)" \
+                -var="openai_name=$(OPENAI_NAME)" \
+                -var="openai_resource_group_name=$(OPENAI_RG)" \
+                -var="openai_deployment=$(OPENAI_DEPLOYMENT)" \
+                -var="mcp_server_url=$(MCP_SERVER_URL)" \
+                -var="slack_webhook=$(SLACK_WEBHOOK)"
+            displayName: 'Terraform Apply'
+            workingDirectory: $(terraformWorkingDirectory)
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)
+
+  - stage: DeployFunction
+    dependsOn: DeployInfrastructure
+    jobs:
+      - job: DeployFunctionApp
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -r src/requirements.txt --target="$(System.DefaultWorkingDirectory)/.python_packages/lib/site-packages"
+            displayName: 'Install dependencies'
+          
+          - task: AzureFunctionApp@1
+            displayName: 'Deploy Azure Function App'
+            inputs:
+              azureSubscription: 'azure-sub'
+              appType: 'functionAppLinux'
+              appName: 'func-shp'
+              package: '$(System.DefaultWorkingDirectory)/src'
+              deploymentMethod: 'zipDeploy'
