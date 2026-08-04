@@ -2,16 +2,17 @@ import json, logging
 from openai import AzureOpenAI
 from config import cfg
 from mcp_client import McpClient
-from prompts.system_prompt import SYSTEM_PROMPT
+from prompts.base_prompt import BASE_PROMPT
 
 class SelfHealingAgent:
-    def __init__(self):
+    def __init__(self, system_prompt: str = BASE_PROMPT):
         self.client = AzureOpenAI(
             azure_endpoint=f"https://{cfg.openai_name}.openai.azure.com",
             api_version="2024-10-21",
             azure_ad_token_provider=lambda: cfg.credential.get_token("https://cognitiveservices.azure.com/.default").token,
         )
         self.mcp = McpClient()
+        self.system_prompt = system_prompt
 
     def _tools(self):
         mcp_tools = self.mcp.list_tools() or []
@@ -26,7 +27,7 @@ class SelfHealingAgent:
 
     def run(self, build_id: int, project: str, failure_context: dict) -> dict:
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": (
                 f"Pipeline build {build_id} in project '{project}' failed.\n\n"
                 f"Failure context:\n```json\n{json.dumps(failure_context, indent=2)}\n```\n\n"
@@ -67,4 +68,4 @@ class SelfHealingAgent:
         try:
             return json.loads(content)
         except Exception:
-            return {"root_cause": content, "pr_url": None, "summary": content}
+            return {"root_cause": content, "pr_url": None, "summary": content, "confidence_score": 0}
